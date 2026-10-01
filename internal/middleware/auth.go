@@ -12,49 +12,69 @@ import (
 
 type userContextKey string
 
-const (
-	UserClaimsKey userContextKey = "user_claims"
-	HeaderAPIKey  string         = "X-API-Key"
-)
+const UserContextKey userContextKey = "authenticated_user"
 
-func JWTAuth(authSvc service.AuthService) func(http.Handler) http.Handler {
+func JWTAuth(authService service.AuthService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			traceID := GetRequestID(r.Context())
-
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				response.Error(w, http.StatusUnauthorized, "authorization header missing", traceID)
+
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				response.Error(w, http.StatusUnauthorized, "missing or malformed authorization token", traceID)
 				return
 			}
 
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				response.Error(w, http.StatusUnauthorized, "invalid authorization format: expected Bearer <token>", traceID)
-				return
-			}
-
-			claims, err := authSvc.ValidateToken(parts[1])
+			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			claims, err := authService.ValidateToken(tokenStr, "access")
 			if err != nil {
-				response.Error(w, http.StatusUnauthorized, err.Error(), traceID)
+				response.Error(w, http.StatusUnauthorized, "invalid, expired, or non-access authorization token", traceID)
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), UserClaimsKey, claims)
+			ctx := context.WithValue(r.Context(), UserContextKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func RequireRole(role string) func(http.Handler) http.Handler {
+func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			traceID := GetRequestID(r.Context())
-			claims, ok := r.Context().Value(UserClaimsKey).(*model.JWTClaims)
-			if !ok || claims.Role != role {
-				response.Error(w, http.StatusForbidden, "forbidden: insufficient permissions", traceID)
+			claims, ok := r.Context().Value(UserContextKey).(*model.JWTClaims)
+			if !ok || claims == nil {
+				response.Error(w, http.StatusUnauthorized, "unauthorized identity context", traceID)
 				return
 			}
+
+			for _, role := range allowedRoles {
+				if claims.Role == role {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			response.Error(w, http.StatusForbidden, "access denied: insufficient role privileges", traceID)
+		})
+	}
+}
+
+func RequirePermission(permission string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			traceID := GetRequestID(r.Context())
+			claims, ok := r.Context().Value(UserContextKey).(*model.JWTClaims)
+			if !ok || claims == nil {
+				response.Error(w, http.StatusUnauthorized, "unauthorized identity context", traceID)
+				return
+			}
+
+			if !model.HasPermission(claims.Role, permission) {
+				response.Error(w, http.StatusForbidden, "access denied: missing required permission '"+permission+"'", traceID)
+				return
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -64,19 +84,14 @@ func APIKeyAuth(expectedKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			traceID := GetRequestID(r.Context())
-			key := r.Header.Get(HeaderAPIKey)
-			if key == "" || key != expectedKey {
-				response.Error(w, http.StatusUnauthorized, "invalid or missing X-API-Key header", traceID)
+			apiKey := r.Header.Get("X-API-Key")
+
+			if apiKey == "" || apiKey != expectedKey {
+				response.Error(w, http.StatusUnauthorized, "invalid or missing x-api-key header", traceID)
 				return
 			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-func GetUserClaims(ctx context.Context) *model.JWTClaims {
-	if claims, ok := ctx.Value(UserClaimsKey).(*model.JWTClaims); ok {
-		return claims
-	}
-	return nil
 }

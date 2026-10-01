@@ -10,7 +10,6 @@ import (
 	"github.com/Tnembull/go-core-backend/internal/config"
 	"github.com/Tnembull/go-core-backend/internal/handler"
 	customMw "github.com/Tnembull/go-core-backend/internal/middleware"
-	"github.com/Tnembull/go-core-backend/internal/model"
 	"github.com/Tnembull/go-core-backend/internal/repository"
 	"github.com/Tnembull/go-core-backend/internal/service"
 	"github.com/go-chi/chi/v5"
@@ -106,16 +105,16 @@ func TestAuthAndProtectedFlow(t *testing.T) {
 	}
 
 	var resp struct {
-		Success bool               `json:"success"`
-		Data    model.AuthResponse `json:"data"`
+		Success bool                 `json:"success"`
+		Data    service.AuthResponse `json:"data"`
 	}
 	if err := json.Unmarshal(wLogin.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to parse login response: %v", err)
 	}
 
-	token := resp.Data.Token
+	token := resp.Data.AccessToken
 	if token == "" {
-		t.Fatal("expected JWT token, got empty string")
+		t.Fatal("expected JWT access token, got empty string")
 	}
 
 	// 3. Access Protected /users/me without token -> 401

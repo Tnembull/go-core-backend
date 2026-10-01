@@ -1,164 +1,155 @@
 # Go Core Backend Engine
 
-Production-grade, high-performance Backend Microservice Core built with Go (Golang) following Clean Architecture principles, featuring automated Prometheus metrics, token-bucket rate limiting, JWT & API Key authentication, structured logging, graceful shutdown, and a **complete Postman & Apidog automated test suite**.
+Production-grade, high-performance Backend Microservice Core built with Go (Golang) following Clean Architecture principles. Features enterprise-grade Zero-Trust Security, Granular RBAC, TOTP Two-Factor Authentication (2FA), Refresh Token Rotation, Prometheus metrics telemetry, token-bucket rate limiting, and an automated end-to-end test suite for Postman & Apidog.
+
+[![Go CI & API Testing](https://github.com/Tnembull/go-core-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/Tnembull/go-core-backend/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Tnembull/go-core-backend)](https://goreportcard.com/report/github.com/Tnembull/go-core-backend)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
 
-## 🎯 Architecture Overview
+## 🏛️ System Architecture
 
-```text
-                               +----------------------------------+
-                               |        HTTP Client Request       |
-                               +-----------------+----------------+
-                                                 |
-                                                 v
-                       +--------------------------------------------------+
-                       |           Core Middleware Pipeline               |
-                       |  - Request ID (UUID Trace Injection)             |
-                       |  - Structured Logging (slog JSON)                |
-                       |  - Prometheus Metrics (Counter & Histogram)      |
-                       |  - Token Bucket IP Rate Limiting                 |
-                       |  - CORS & Panic Recovery                         |
-                       +-------------------------+------------------------+
-                                                 |
-                                                 v
-                       +--------------------------------------------------+
-                       |               Chi HTTP Router                    |
-                       +---------+---------------+--------------+---------+
-                                 |               |              |
-                                 v               v              v
-                       +-----------------+ +------------+ +---------------+
-                       |  Health Handler | | Auth Layer | | Users / Admin |
-                       +-----------------+ +------------+ +---------------+
-                                 |               |              |
-                                 v               v              v
-                       +--------------------------------------------------+
-                       |             Clean Service Domain                 |
-                       |  - Password Hashing (Bcrypt)                     |
-                       |  - JWT Claims Token Generation & Validation      |
-                       |  - RBAC Scope Guard (admin vs user)              |
-                       +-------------------------+------------------------+
-                                                 |
-                                                 v
-                       +--------------------------------------------------+
-                       |         Repository & Persistence Layer           |
-                       +--------------------------------------------------+
+Built on Clean Architecture separation of concerns:
+
+```
+                      ┌─────────────────────────────────────────┐
+                      │    HTTP Clients / Microservices / CDN   │
+                      └────────────────────┬────────────────────┘
+                                           │
+                                           ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Middlewares: Request ID Trace ➔ Slog Logger ➔ Prometheus Metrics ➔ IP Rate Limiter     │
+└──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                           │
+                    ┌──────────────────────┴──────────────────────┐
+                    ▼                                             ▼
+       ┌────────────────────────┐                    ┌────────────────────────┐
+       │ Public Handlers        │                    │ Protected Handlers     │
+       │  - /healthz, /readyz   │                    │  - JWT Bearer (Access) │
+       │  - /metrics            │                    │  - Granular RBAC       │
+       │  - /auth/login         │                    │  - Machine-to-Machine  │
+       │  - /auth/register      │                    │    (X-API-Key)         │
+       └────────────┬───────────┘                    └────────────┬───────────┘
+                    │                                             │
+                    └──────────────────────┬──────────────────────┘
+                                           ▼
+                     ┌──────────────────────────────────────────┐
+                     │ Service Layer (Core Business Logic)      │
+                     │  - AuthService (JWT, TOTP 2FA, Rotation) │
+                     │  - HealthService (Runtime Telemetry)     │
+                     └─────────────────────┬────────────────────┘
+                                           ▼
+                     ┌──────────────────────────────────────────┐
+                     │ Repository Layer (Thread-Safe Persistence│
+                     │ & Revocation Token Blacklist)            │
+                     └──────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Key Features
+## 🛡️ Enterprise Security Features
 
-1. **Clean Layered Architecture**:
-   - `internal/handler`: HTTP request parsing and response orchestration.
-   - `internal/service`: Domain business rules and security policies.
-   - `internal/repository`: Data access interfaces and thread-safe persistence.
-   - `internal/middleware`: Modular request pipeline (Tracing, Metrics, Rate limiting, Auth).
-   - `pkg/response`: Standardized JSON envelope format with `trace_id` and timestamps.
+### 1. Granular RBAC (Role-Based Access Control)
+Supports hierarchical roles with fine-grained permission scopes:
 
-2. **Full Observability & Kubernetes Probes**:
-   - `GET /healthz`: Liveness probe for Kubernetes pod lifecycle.
-   - `GET /readyz`: Readiness probe ensuring dependencies are healthy before taking traffic.
-   - `GET /metrics`: Standard Prometheus metrics scraping endpoint (`http_requests_total`, `http_request_duration_seconds`).
-   - `GET /api/v1/system/info`: Live runtime memory diagnostics and server uptime.
+| Role | Permissions | Accessible Scopes |
+| :--- | :--- | :--- |
+| `superadmin` | `*` (Wildcard) | Full system configuration & management |
+| `admin` | `users:read`, `users:write`, `audit:read` | User administration & audit logs |
+| `editor` | `users:read`, `users:write` | Content & user mutation |
+| `viewer` | `users:read` | Read-only operations |
 
-3. **Multi-Vector Security & RBAC**:
-   - **Bcrypt (Cost 10)** password hashing.
-   - **JWT (HMAC-SHA256)** authentication with configurable expiration.
-   - **Role-Based Access Control (RBAC)** guarding admin-only endpoints.
-   - **Machine-to-Machine Authentication** via static `X-API-Key` headers.
-   - **In-Memory Token Bucket Rate Limiter** to prevent DoS attacks.
+* Middleware filters:
+  * `middleware.RequireRole("admin", "superadmin")`
+  * `middleware.RequirePermission("users:write")`
 
-4. **Reliability & Graceful Shutdown**:
-   - Listens for `SIGINT` / `SIGTERM` signals.
-   - Drains active connections with a 10-second graceful shutdown window.
+### 2. Two-Factor Authentication (TOTP 2FA)
+* Built on RFC 6238 TOTP (compatible with Google Authenticator, 1Password, Authy).
+* **Setup flow**: `POST /api/v1/auth/2fa/setup` generates base32 secret, `otpauth://` QR URI, and 4 single-use recovery codes.
+* **Activation**: `POST /api/v1/auth/2fa/enable` requires valid 6-digit TOTP code before activating 2FA.
+* **Login flow with 2FA**:
+  1. `POST /api/v1/auth/login` detects `two_factor_enabled: true` and issues a short-lived `2fa_preauth` temporary token (`mfa_required: true`).
+  2. `POST /api/v1/auth/2fa/verify` verifies code + `temp_token` and grants full access session.
+
+### 3. Token Rotation & Revocation
+* Short-lived Access Token (HS256) paired with Long-lived Refresh Token (7 days).
+* **Refresh**: `POST /api/v1/auth/refresh` rotates the token pair and blacklists the previous refresh token JTI.
+* **Logout**: `POST /api/v1/auth/logout` invalidates the active refresh token.
+
+### 4. Machine-to-Machine (M2M) Security
+* Secure inter-service communication via `X-API-Key` authentication header (`GET /api/v1/internal/ping`).
 
 ---
 
-## 🧪 Postman & Apidog Automated Testing Suite
+## 🧪 Postman & Apidog Test Suite
 
-This repository includes a production-ready API test suite compatible with **Postman**, **Apidog**, and the **Newman CLI**.
+The repository includes a 100% compliant **Postman Collection v2.1.0** test suite that runs seamlessly in both **Postman** and **Apidog**, as well as headlessly via **Newman CLI**.
 
-### 1. File Locations
-- **Collection**: `tests/postman/go-core-backend.postman_collection.json`
-- **Environment**: `tests/postman/go-core-backend.postman_environment.json`
-- **Automated Runner**: `tests/run_e2e_newman.sh`
+* Collection file: `tests/postman/go-core-backend.postman_collection.json`
+* Environment file: `tests/postman/go-core-backend.postman_environment.json`
 
-### 2. How to Import to Apidog / Postman GUI
-1. Open **Postman** or **Apidog**.
-2. Click **Import** -> Select `tests/postman/go-core-backend.postman_collection.json`.
-3. Import `tests/postman/go-core-backend.postman_environment.json` into Environments.
-4. Run the Collection runner: all 11 endpoints and 22 assertions will automatically validate:
-   - Dynamic token extraction and propagation into protected endpoints (`{{jwt_token}}`).
-   - Response status codes (200, 201, 401).
-   - Trace ID header presence.
-   - Metrics payload integrity.
+### Executed Test Scenarios (20 Requests, 35 Assertions):
+1. **Telemetry & Observability**:
+   - `GET /healthz` (Liveness) & `GET /readyz` (Readiness)
+   - `GET /metrics` (Prometheus telemetry validation)
+   - `GET /api/v1/system/info` (Uptime, Memory, Goroutine inspect)
+2. **Authentication & Token Lifecycle**:
+   - Register Admin & Viewer users without password leakage
+   - Login & automatic token propagation to Postman environment
+   - Refresh Token exchange and rotation verification
+3. **Granular RBAC Enforcement**:
+   - Admin access granted to `/admin/dashboard` (200 OK)
+   - Viewer denied access to `/admin/dashboard` (403 Forbidden)
+   - Admin mutates data with `users:write` permission (200 OK)
+   - Viewer denied mutation due to missing permission (403 Forbidden)
+   - Admin denied system settings (requires superadmin `settings:manage`)
+4. **TOTP 2FA Verification**:
+   - Initiate 2FA setup and receive `otpauth://` URI
+   - Rejection of invalid TOTP codes
+5. **M2M Security & Revocation**:
+   - Handshake with `X-API-Key`
+   - Rejection of unauthorized internal requests (401)
+   - Logout and verification that revoked refresh tokens cannot be reused
 
-### 3. Run Automated CLI Test (Newman)
+### Running Newman CLI Locally:
 ```bash
 ./tests/run_e2e_newman.sh
 ```
 
----
-
-## 📁 Repository Structure
-
-```text
-├── cmd/
-│   └── server/
-│       └── main.go                     # Application entrypoint & dependency injection
-├── internal/
-│   ├── config/                         # Environment configuration parser
-│   ├── handler/                        # HTTP controllers (Health, Auth, User)
-│   ├── middleware/                     # Trace ID, Logger, Metrics, Rate Limit, Auth
-│   ├── model/                          # Domain models, DTOs, and JWT Claims
-│   ├── repository/                     # Data access interface & thread-safe store
-│   └── service/                        # Business logic & security hashing
-├── pkg/
-│   ├── logger/                         # Structured slog JSON logger
-│   └── response/                       # Standardized JSON response envelope
-├── tests/
-│   ├── postman/                        # Postman & Apidog Collections and Environments
-│   └── run_e2e_newman.sh               # Automated Newman CLI test executor
-├── Dockerfile                          # Multi-stage hardened Alpine container
-└── .github/workflows/
-    └── ci.yml                          # Go tests + Newman Postman runner in CI
-```
+### Importing into Apidog / Postman:
+1. Open **Apidog** or **Postman**.
+2. Click **Import** -> Select `tests/postman/go-core-backend.postman_collection.json`.
+3. Select Environment -> Import `tests/postman/go-core-backend.postman_environment.json`.
+4. Run Collection -> All 35 assertions run and pass automatically.
 
 ---
 
-## 🛠️ Quickstart
+## 🚀 Quickstart & Docker
 
-### 1. Run Locally
+### 1. Local Run
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/Tnembull/go-core-backend.git
 cd go-core-backend
 
-# Copy environment template
-cp .env.example .env
+# Run Unit Tests
+go test -v ./...
 
-# Run server
+# Start Server
 go run cmd/server/main.go
 ```
 
-### 2. Run with Docker
+### 2. Multi-Stage Docker Container
 ```bash
-docker build -t go-core-backend .
-docker run -p 8080:8080 go-core-backend
-```
+# Build hardened non-root container
+docker build -t go-core-backend:latest .
 
-### 3. Run Unit & Integration Tests
-```bash
-go test -v ./...
+# Run container
+docker run -d -p 8080:8080 --name core-api go-core-backend:latest
 ```
 
 ---
 
-## 🛡️ Security & Zero Leak Posture
-- All production secrets, database credentials, and JWT keys are isolated into `.env` (guarded by `.gitignore`).
-- Docker container runs strictly as unprivileged user `appuser:10001` with minimal attack surface.
-
----
-**Author**: Muhammad Nur Ashiddiqi  
-**Portfolio**: [muhammadnurashiddiqi.my.id](https://muhammadnurashiddiqi.my.id)
+## 📄 License
+MIT License. Authored by [Muhammad Nur Ashiddiqi (Tnembull)](https://github.com/Tnembull).

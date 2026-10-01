@@ -2,36 +2,15 @@
   "info": {
     "_postman_id": "71329be6-d8bb-4475-b6d4-8d4889c02ff4",
     "name": "Go Core Backend API Suite (Postman & Apidog)",
-    "description": "Production test suite for Go Core Backend API covering Health Probes, Metrics, JWT Auth, RBAC Authorization, and API Key Validation. Fully compatible with Postman, Apidog, and Newman CLI.",
+    "description": "Enterprise test suite for Go Core Backend API: Clean Architecture, Observability, Granular RBAC, TOTP 2FA, Token Rotation, and M2M Security.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "01. Observability & Probes",
+      "name": "01. Telemetry & Observability",
       "item": [
         {
           "name": "Liveness Probe (GET /healthz)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "pm.test('Service is reported UP', function () {",
-                  "    var json = pm.response.json();",
-                  "    pm.expect(json.success).to.eql(true);",
-                  "    pm.expect(json.data.status).to.eql('UP');",
-                  "});",
-                  "pm.test('X-Trace-ID header is present', function () {",
-                  "    pm.expect(pm.response.headers.has('X-Trace-ID')).to.be.true;",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
           "request": {
             "method": "GET",
             "header": [],
@@ -40,27 +19,30 @@
               "host": ["{{base_url}}"],
               "path": ["healthz"]
             }
-          }
-        },
-        {
-          "name": "Readiness Probe (GET /readyz)",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 200', function () {",
+                  "pm.test('Status code is 200 OK', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Service is reported READY', function () {",
+                  "pm.test('Health status is UP', function () {",
                   "    var json = pm.response.json();",
-                  "    pm.expect(json.data.status).to.eql('READY');",
+                  "    pm.expect(json.data.status).to.eql('UP');",
+                  "});",
+                  "pm.test('Distributed trace ID header present', function () {",
+                  "    pm.expect(pm.response.headers.has('X-Request-ID')).to.be.true;",
                   "});"
                 ],
                 "type": "text/javascript"
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Readiness Probe (GET /readyz)",
           "request": {
             "method": "GET",
             "header": [],
@@ -69,57 +51,27 @@
               "host": ["{{base_url}}"],
               "path": ["readyz"]
             }
-          }
-        },
-        {
-          "name": "System Info & Telemetry (GET /api/v1/system/info)",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 200', function () {",
+                  "pm.test('Status code is 200 OK', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Payload includes memory and uptime diagnostics', function () {",
+                  "pm.test('Readiness status is READY', function () {",
                   "    var json = pm.response.json();",
-                  "    pm.expect(json.data).to.have.property('uptime');",
-                  "    pm.expect(json.data).to.have.property('system');",
-                  "    pm.expect(json.data.system).to.have.property('go_version');",
+                  "    pm.expect(json.data.status).to.eql('READY');",
                   "});"
                 ],
                 "type": "text/javascript"
               }
             }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/v1/system/info",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "system", "info"]
-            }
-          }
+          ]
         },
         {
-          "name": "Prometheus Scraping (GET /metrics)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "pm.test('Metrics output contains http_requests_total', function () {",
-                  "    pm.expect(pm.response.text()).to.include('http_requests_total');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Prometheus Metrics (GET /metrics)",
           "request": {
             "method": "GET",
             "header": [],
@@ -128,15 +80,80 @@
               "host": ["{{base_url}}"],
               "path": ["metrics"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Contains Prometheus request telemetry', function () {",
+                  "    pm.expect(pm.response.text()).to.include('http_requests_total');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "System Info & Runtime Stats (GET /api/v1/system/info)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/system/info",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "system", "info"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Telemetry payload structure valid', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data).to.have.property('uptime');",
+                  "    pm.expect(json.data).to.have.property('version');",
+                  "    pm.expect(json.data).to.have.property('runtime');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "02. Authentication & Authorization",
+      "name": "02. Authentication & Token Lifecycle",
       "item": [
         {
-          "name": "Register User (POST /api/v1/auth/register)",
+          "name": "Register Admin User (POST /api/v1/auth/register)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin-core@example.com\",\n  \"password\": \"MasterPassword123!\",\n  \"role\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          },
           "event": [
             {
               "listen": "test",
@@ -145,16 +162,20 @@
                   "pm.test('Status code is 201 Created', function () {",
                   "    pm.response.to.have.status(201);",
                   "});",
-                  "pm.test('User created without leaking password hash', function () {",
+                  "pm.test('Admin registered without password leak', function () {",
                   "    var json = pm.response.json();",
-                  "    pm.expect(json.data.email).to.eql('apidog-tester@example.com');",
-                  "    pm.expect(json.data).to.not.have.property('password');",
+                  "    pm.expect(json.data.email).to.eql('admin-core@example.com');",
+                  "    pm.expect(json.data.role).to.eql('admin');",
+                  "    pm.expect(json.data.password).to.be.undefined;",
                   "});"
                 ],
                 "type": "text/javascript"
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Register Viewer User (POST /api/v1/auth/register)",
           "request": {
             "method": "POST",
             "header": [
@@ -165,35 +186,34 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"apidog-tester@example.com\",\n  \"password\": \"SecureAdminPass123!\",\n  \"role\": \"admin\"\n}"
+              "raw": "{\n  \"email\": \"viewer-core@example.com\",\n  \"password\": \"ViewerPassword123!\",\n  \"role\": \"viewer\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/register",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "auth", "register"]
             }
-          }
-        },
-        {
-          "name": "Login & Issue JWT (POST /api/v1/auth/login)",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 200 OK', function () {",
-                  "    pm.response.to.have.status(200);",
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
                   "});",
-                  "pm.test('Extract and persist JWT token', function () {",
+                  "pm.test('Viewer role correctly assigned', function () {",
                   "    var json = pm.response.json();",
-                  "    pm.expect(json.data).to.have.property('token');",
-                  "    pm.environment.set('jwt_token', json.data.token);",
+                  "    pm.expect(json.data.role).to.eql('viewer');",
                   "});"
                 ],
                 "type": "text/javascript"
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Login as Admin (POST /api/v1/auth/login)",
           "request": {
             "method": "POST",
             "header": [
@@ -204,17 +224,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"apidog-tester@example.com\",\n  \"password\": \"SecureAdminPass123!\"\n}"
+              "raw": "{\n  \"email\": \"admin-core@example.com\",\n  \"password\": \"MasterPassword123!\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/api/v1/auth/login",
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "auth", "login"]
             }
-          }
-        },
-        {
-          "name": "Get Authenticated Profile (GET /api/v1/users/me)",
+          },
           "event": [
             {
               "listen": "test",
@@ -223,33 +240,39 @@
                   "pm.test('Status code is 200 OK', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Returns authenticated user profile', function () {",
-                  "    var json = pm.response.json();",
-                  "    pm.expect(json.data.email).to.eql('apidog-tester@example.com');",
-                  "    pm.expect(json.data.role).to.eql('admin');",
+                  "var json = pm.response.json();",
+                  "pm.test('Extract and persist Admin Tokens', function () {",
+                  "    pm.expect(json.data.token).to.not.be.empty;",
+                  "    pm.expect(json.data.refresh_token).to.not.be.empty;",
+                  "    pm.environment.set('admin_token', json.data.token);",
+                  "    pm.environment.set('refresh_token', json.data.refresh_token);",
                   "});"
                 ],
                 "type": "text/javascript"
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Login as Viewer (POST /api/v1/auth/login)",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
               {
-                "key": "Authorization",
-                "value": "Bearer {{jwt_token}}"
+                "key": "Content-Type",
+                "value": "application/json"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"viewer-core@example.com\",\n  \"password\": \"ViewerPassword123!\"\n}"
+            },
             "url": {
-              "raw": "{{base_url}}/api/v1/users/me",
+              "raw": "{{base_url}}/api/v1/auth/login",
               "host": ["{{base_url}}"],
-              "path": ["api", "v1", "users", "me"]
+              "path": ["api", "v1", "auth", "login"]
             }
-          }
-        },
-        {
-          "name": "Access Admin RBAC Resource (GET /api/v1/admin/dashboard)",
+          },
           "event": [
             {
               "listen": "test",
@@ -258,21 +281,72 @@
                   "pm.test('Status code is 200 OK', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Admin scope successfully granted', function () {",
-                  "    var json = pm.response.json();",
-                  "    pm.expect(json.data.scope).to.eql('admin_only');",
+                  "var json = pm.response.json();",
+                  "pm.test('Extract and persist Viewer Token', function () {",
+                  "    pm.expect(json.data.token).to.not.be.empty;",
+                  "    pm.environment.set('viewer_token', json.data.token);",
                   "});"
                 ],
                 "type": "text/javascript"
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Refresh Token Rotation (POST /api/v1/auth/refresh)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Rotates and issues new token pair', function () {",
+                  "    pm.expect(json.data.token).to.not.be.empty;",
+                  "    pm.expect(json.data.refresh_token).to.not.be.empty;",
+                  "    pm.expect(json.data.refresh_token).to.not.eql(pm.environment.get('refresh_token'));",
+                  "    pm.environment.set('admin_token', json.data.token);",
+                  "    pm.environment.set('refresh_token', json.data.refresh_token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Granular RBAC & Permission Enforcement",
+      "item": [
+        {
+          "name": "Admin Accesses Dashboard (GET /api/v1/admin/dashboard)",
           "request": {
             "method": "GET",
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{jwt_token}}"
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": {
@@ -280,19 +354,50 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "admin", "dashboard"]
             }
-          }
-        },
-        {
-          "name": "Reject Unauthorized Request (GET /api/v1/users/me without token)",
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 401 Unauthorized', function () {",
-                  "    pm.response.to.have.status(401);",
+                  "pm.test('Status code is 200 OK for Admin', function () {",
+                  "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Response returns failure flag', function () {",
+                  "pm.test('Admin scope granted', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.scope).to.eql('admin_only');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Viewer Denied Admin Dashboard (GET /api/v1/admin/dashboard)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/dashboard",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "dashboard"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden for Viewer', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Error message reflects RBAC role privilege check', function () {",
                   "    var json = pm.response.json();",
                   "    pm.expect(json.success).to.be.false;",
                   "});"
@@ -300,24 +405,123 @@
                 "type": "text/javascript"
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Admin Mutates User Data via Permission (POST /api/v1/users/write)",
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
             "url": {
-              "raw": "{{base_url}}/api/v1/users/me",
+              "raw": "{{base_url}}/api/v1/users/write",
               "host": ["{{base_url}}"],
-              "path": ["api", "v1", "users", "me"]
+              "path": ["api", "v1", "users", "write"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK (has users:write permission)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Permission action acknowledged', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.action).to.eql('users:write');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Viewer Denied Mutation (POST /api/v1/users/write)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{viewer_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/write",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "write"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden for Viewer (lacks users:write)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin Denied System Settings (POST /api/v1/system/settings)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/system/settings",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "system", "settings"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden (requires superadmin settings:manage)', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
     {
-      "name": "03. Machine-to-Machine & API Keys",
+      "name": "04. Two-Factor Authentication (TOTP 2FA)",
       "item": [
         {
-          "name": "Internal Ping with API Key (GET /api/v1/internal/ping)",
+          "name": "Initiate 2FA Setup (POST /api/v1/auth/2fa/setup)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/2fa/setup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "2fa", "setup"]
+            }
+          },
           "event": [
             {
               "listen": "test",
@@ -326,15 +530,63 @@
                   "pm.test('Status code is 200 OK', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Machine handshake verified', function () {",
-                  "    var json = pm.response.json();",
-                  "    pm.expect(json.data.message).to.eql('internal system operational');",
+                  "var json = pm.response.json();",
+                  "pm.test('Generates TOTP secret and otpauth URI', function () {",
+                  "    pm.expect(json.data.secret).to.not.be.empty;",
+                  "    pm.expect(json.data.otpauth_url).to.include('otpauth://totp/');",
+                  "    pm.expect(json.data.recovery_codes).to.be.an('array');",
                   "});"
                 ],
                 "type": "text/javascript"
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Reject Invalid 2FA Activation (POST /api/v1/auth/2fa/enable)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"passcode\": \"000000\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/2fa/enable",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "2fa", "enable"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400 Bad Request on bogus passcode', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05. Machine-to-Machine Security & Logout",
+      "item": [
+        {
+          "name": "Internal Ping with API Key (GET /api/v1/internal/ping)",
           "request": {
             "method": "GET",
             "header": [
@@ -348,10 +600,41 @@
               "host": ["{{base_url}}"],
               "path": ["api", "v1", "internal", "ping"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Machine handshake verified', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.source).to.eql('m2m_auth');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Reject Invalid API Key (GET /api/v1/internal/ping)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "invalid-rogue-api-key"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/ping",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "ping"]
+            }
+          },
           "event": [
             {
               "listen": "test",
@@ -364,21 +647,75 @@
                 "type": "text/javascript"
               }
             }
-          ],
+          ]
+        },
+        {
+          "name": "Logout & Session Invalidation (POST /api/v1/auth/logout)",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
               {
-                "key": "X-API-Key",
-                "value": "invalid-dummy-key"
+                "key": "Content-Type",
+                "value": "application/json"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
             "url": {
-              "raw": "{{base_url}}/api/v1/internal/ping",
+              "raw": "{{base_url}}/api/v1/auth/logout",
               "host": ["{{base_url}}"],
-              "path": ["api", "v1", "internal", "ping"]
+              "path": ["api", "v1", "auth", "logout"]
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Revoked Refresh Token Rejection (POST /api/v1/auth/refresh)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized for revoked token', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     }

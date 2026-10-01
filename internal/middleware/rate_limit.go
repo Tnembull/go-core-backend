@@ -35,6 +35,11 @@ func NewIPRateLimiter(rps float64, burst int) *ipRateLimiter {
 	return i
 }
 
+func RateLimiter(rps float64, burst int) func(http.Handler) http.Handler {
+	limiter := NewIPRateLimiter(rps, burst)
+	return limiter.Middleware
+}
+
 func (i *ipRateLimiter) getLimiter(ip string) *rate.Limiter {
 	i.mu.Lock()
 	defer i.mu.Unlock()

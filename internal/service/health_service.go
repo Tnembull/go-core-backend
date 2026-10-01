@@ -33,7 +33,7 @@ func (s *healthService) Check() model.HealthStatus {
 		Version:   s.version,
 		Uptime:    uptime,
 		Timestamp: time.Now().UTC(),
-		System: map[string]string{
+		Runtime: map[string]string{
 			"go_version":   runtime.Version(),
 			"num_cpu":      fmt.Sprintf("%d", runtime.NumCPU()),
 			"num_goroutine": fmt.Sprintf("%d", runtime.NumGoroutine()),
