@@ -26,7 +26,7 @@ func setupTestRouter() (*chi.Mux, service.AuthService) {
 
 	repo := repository.NewInMemoryUserRepository()
 	authSvc := service.NewAuthService(repo, cfg)
-	healthSvc := service.NewHealthService("1.0.0-test")
+	healthSvc := service.NewHealthService("1.0.0-test", "test")
 
 	healthH := handler.NewHealthHandler(healthSvc)
 	authH := handler.NewAuthHandler(authSvc)

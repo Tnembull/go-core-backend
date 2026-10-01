@@ -10,13 +10,14 @@ var Log *slog.Logger
 func Init(env string) {
 	var handler slog.Handler
 	opts := &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		AddSource: env == "development", // show file:line only in development
 	}
 
 	if env == "development" {
 		opts.Level = slog.LevelDebug
 		handler = slog.NewTextHandler(os.Stdout, opts)
 	} else {
+		opts.Level = slog.LevelInfo
 		handler = slog.NewJSONHandler(os.Stdout, opts)
 	}
 

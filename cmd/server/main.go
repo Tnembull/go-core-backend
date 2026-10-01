@@ -34,12 +34,13 @@ func main() {
 		slog.String("version", AppVersion),
 		slog.String("port", cfg.Port),
 		slog.String("env", cfg.AppEnv),
+		slog.Bool("pprof_enabled", cfg.EnablePProf),
 	)
 
 	// Dependency Injection Layers
 	userRepo := repository.NewInMemoryUserRepository()
 	authService := service.NewAuthService(userRepo, cfg)
-	healthService := service.NewHealthService(AppVersion)
+	healthService := service.NewHealthService(AppVersion, cfg.AppEnv)
 
 	authHandler := handler.NewAuthHandler(authService)
 	healthHandler := handler.NewHealthHandler(healthService)
@@ -55,15 +56,26 @@ func main() {
 	r.Use(middleware.PrometheusMetrics)
 	r.Use(middleware.RateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst))
 
-	// CORS Configuration
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
+	// CORS Configuration (Dev vs Prod aware)
+	corsOptions := cors.Options{
+		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID", "X-API-Key"},
 		ExposedHeaders:   []string{"Link", "X-Request-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,
-	}))
+	}
+	if cfg.IsDevelopment() {
+		// Allow any origin during local frontend development
+		corsOptions.AllowedOrigins = []string{"*"}
+	}
+	r.Use(cors.Handler(corsOptions))
+
+	// Optional Debug / Profiler Route for Development
+	if cfg.EnablePProf {
+		logger.Log.Info("mounting development pprof profiler at /debug/pprof")
+		r.Mount("/debug", chiMiddleware.Profiler())
+	}
 
 	// Observability & System Routes
 	r.Get("/healthz", healthHandler.Liveness)
@@ -130,7 +142,10 @@ func main() {
 	// Server runner in background
 	serverErrors := make(chan error, 1)
 	go func() {
-		logger.Log.Info("HTTP server running and listening", slog.String("addr", server.Addr))
+		logger.Log.Info("HTTP server running and listening",
+			slog.String("addr", server.Addr),
+			slog.String("env", cfg.AppEnv),
+		)
 		serverErrors <- server.ListenAndServe()
 	}()
 

@@ -50,6 +50,18 @@ Built on Clean Architecture separation of concerns:
 
 ## 🛡️ Enterprise Security Features
 
+### 0. Environment Profiles (Development vs Production)
+The engine automatically shifts behavior based on `APP_ENV` (`development` vs `production`):
+
+| Feature | Development Mode (`development`) | Production Mode (`production`) |
+| :--- | :--- | :--- |
+| **Configuration Loading** | Automatic `.env.local`, `.env.development`, `.env` | Environment Variables / Kubernetes Secrets |
+| **Structured Logger** | Human-readable colored text, `DEBUG` level, `file:line` source | High-performance JSON, `INFO` level, RFC3339 timestamp |
+| **CORS Policy** | Permissive wildcard `*` for local dev tools & vite | Strict origin domain whitelist (`CORS_ALLOWED_ORIGINS`) |
+| **Runtime Profiler** | Active `net/http/pprof` mounted at `/debug/pprof` | Profiler disabled / quarantined behind auth |
+| **Rate Limiter** | Lenient 200 RPS / 500 burst for rapid test iteration | Strict 50 RPS / 100 burst token bucket |
+| **Telemetry Tagging** | Telemetry response reports `"environment": "development"` | Telemetry reports `"environment": "production"` |
+
 ### 1. Granular RBAC (Role-Based Access Control)
 Supports hierarchical roles with fine-grained permission scopes:
 
