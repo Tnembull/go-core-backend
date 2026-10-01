@@ -1,0 +1,23 @@
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.log
+test-server.log
+
+# Test coverage & binaries
+*.out
+*.test
+
+# Environment files with secrets
+.env
+*.env
+!*.env.example
+
+# IDE specific
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace

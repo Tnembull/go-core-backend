@@ -1,0 +1,386 @@
+{
+  "info": {
+    "_postman_id": "71329be6-d8bb-4475-b6d4-8d4889c02ff4",
+    "name": "Go Core Backend API Suite (Postman & Apidog)",
+    "description": "Production test suite for Go Core Backend API covering Health Probes, Metrics, JWT Auth, RBAC Authorization, and API Key Validation. Fully compatible with Postman, Apidog, and Newman CLI.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01. Observability & Probes",
+      "item": [
+        {
+          "name": "Liveness Probe (GET /healthz)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Service is reported UP', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.eql(true);",
+                  "    pm.expect(json.data.status).to.eql('UP');",
+                  "});",
+                  "pm.test('X-Trace-ID header is present', function () {",
+                  "    pm.expect(pm.response.headers.has('X-Trace-ID')).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/healthz",
+              "host": ["{{base_url}}"],
+              "path": ["healthz"]
+            }
+          }
+        },
+        {
+          "name": "Readiness Probe (GET /readyz)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Service is reported READY', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.status).to.eql('READY');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/readyz",
+              "host": ["{{base_url}}"],
+              "path": ["readyz"]
+            }
+          }
+        },
+        {
+          "name": "System Info & Telemetry (GET /api/v1/system/info)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Payload includes memory and uptime diagnostics', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data).to.have.property('uptime');",
+                  "    pm.expect(json.data).to.have.property('system');",
+                  "    pm.expect(json.data.system).to.have.property('go_version');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/system/info",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "system", "info"]
+            }
+          }
+        },
+        {
+          "name": "Prometheus Scraping (GET /metrics)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Metrics output contains http_requests_total', function () {",
+                  "    pm.expect(pm.response.text()).to.include('http_requests_total');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["metrics"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Authentication & Authorization",
+      "item": [
+        {
+          "name": "Register User (POST /api/v1/auth/register)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('User created without leaking password hash', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.email).to.eql('apidog-tester@example.com');",
+                  "    pm.expect(json.data).to.not.have.property('password');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"apidog-tester@example.com\",\n  \"password\": \"SecureAdminPass123!\",\n  \"role\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login & Issue JWT (POST /api/v1/auth/login)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Extract and persist JWT token', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data).to.have.property('token');",
+                  "    pm.environment.set('jwt_token', json.data.token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"apidog-tester@example.com\",\n  \"password\": \"SecureAdminPass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Authenticated Profile (GET /api/v1/users/me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Returns authenticated user profile', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.email).to.eql('apidog-tester@example.com');",
+                  "    pm.expect(json.data.role).to.eql('admin');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "me"]
+            }
+          }
+        },
+        {
+          "name": "Access Admin RBAC Resource (GET /api/v1/admin/dashboard)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Admin scope successfully granted', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.scope).to.eql('admin_only');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/dashboard",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "Reject Unauthorized Request (GET /api/v1/users/me without token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test('Response returns failure flag', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.false;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Machine-to-Machine & API Keys",
+      "item": [
+        {
+          "name": "Internal Ping with API Key (GET /api/v1/internal/ping)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Machine handshake verified', function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.data.message).to.eql('internal system operational');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/ping",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "ping"]
+            }
+          }
+        },
+        {
+          "name": "Reject Invalid API Key (GET /api/v1/internal/ping)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "invalid-dummy-key"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/internal/ping",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "internal", "ping"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
