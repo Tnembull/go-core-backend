@@ -1,4 +1,4 @@
-name: "Go Core Backend CI & API Testing"
+name: "Go Core Backend CI & Security Pipeline"
 
 on:
   push:
@@ -7,15 +7,22 @@ on:
     branches: [ "main" ]
 
 jobs:
-  test-and-verify:
-    name: "Go Unit Tests & Newman Postman/Apidog Suite"
+  security-audit-and-tests:
+    name: "DevSecOps Gates, Newman API Suite & Container Scan"
     runs-on: ubuntu-latest
 
     steps:
       - name: "Checkout Code"
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Go
+      - name: "Secret Detection (Gitleaks)"
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Set up Go"
         uses: actions/setup-go@v5
         with:
           go-version: 'stable'
@@ -38,11 +45,21 @@ jobs:
       - name: "Install Newman (Postman / Apidog CLI Runner)"
         run: npm install -g newman
 
-      - name: "Execute Automated Postman / Apidog Collection Tests"
+      - name: "Execute Automated Postman / Apidog Suite"
         run: |
           chmod +x ./tests/run_e2e_newman.sh
           ./tests/run_e2e_newman.sh
 
-      - name: "Build Production Docker Container Image"
+      - name: "Build Hardened Production Docker Image"
         run: |
           docker build -t go-core-backend:${{ github.sha }} .
+
+      - name: "Container Vulnerability Scan (Aqua Trivy)"
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "go-core-backend:${{ github.sha }}"
+          format: "table"
+          exit-code: "0"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"

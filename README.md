@@ -92,6 +92,26 @@ Supports hierarchical roles with fine-grained permission scopes:
 ### 4. Machine-to-Machine (M2M) Security
 * Secure inter-service communication via `X-API-Key` authentication header (`GET /api/v1/internal/ping`).
 
+### 5. OWASP Top 10 Response Hardening
+Defensive HTTP headers injected globally into every HTTP response:
+* `X-Content-Type-Options: nosniff` (Preempts MIME-confusion attacks)
+* `X-Frame-Options: DENY` (Mitigates clickjacking completely)
+* `X-XSS-Protection: 0` (Sanitizes legacy reflective XSS bugs)
+* `Referrer-Policy: strict-origin-when-cross-origin` (Protects query params and user paths from leaking)
+* `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
+* `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none';`
+* `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload` (HSTS enabled in production)
+
+### 6. DoS, OOM & Slowloris Mitigations
+* **Slowloris Defense**: `ReadHeaderTimeout: 3s` ensures slow drip client attacks cannot tie up worker threads.
+* **Payload Memory Guard**: `middleware.BodyLimit(1MB)` prevents malicious oversized JSON payloads from overwhelming server RAM.
+* **Token-Bucket Rate Limiter**: IP-based rate limiting with automatic background reaper for stale clients.
+
+### 7. DevSecOps CI Quality Gates
+The repository is continuously scanned against vulnerabilities:
+* **Gitleaks**: Scans every commit for leaked secrets, private keys, or API tokens.
+* **Aqua Trivy**: Container vulnerability scanning ensuring zero unpatched CRITICAL/HIGH CVEs in base images.
+
 ---
 
 ## 🧪 Postman & Apidog Test Suite

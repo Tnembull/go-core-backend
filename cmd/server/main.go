@@ -51,6 +51,8 @@ func main() {
 
 	// Global Middlewares
 	r.Use(middleware.RequestID)
+	r.Use(middleware.SecurityHeaders(cfg.IsProduction()))
+	r.Use(middleware.BodyLimit(1 << 20)) // 1 MB payload limit
 	r.Use(middleware.Logger)
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(middleware.PrometheusMetrics)
@@ -132,11 +134,12 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           r,
+		ReadHeaderTimeout: 3 * time.Second, // Mitigates Slowloris attacks
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	// Server runner in background
